@@ -32,9 +32,9 @@ object ConfigSecurity extends Logging{
     } else Option(System.getenv("VAULT_TOKEN"))
     if(vaultToken.isDefined) {
       require(vaultHost.isDefined, "A proper vault host is required")
-      logInfo(s"env VAR: ${sys.env.mkString("\n")}")
+      logDebug(s"env VAR: ${sys.env.mkString("\n")}")
       val secretOptionsMap = ConfigSecurity.extractSecretFromEnv(sys.env)
-      logInfo(s"secretOptionsMap: ${secretOptionsMap.mkString("\n")}")
+      logDebug(s"secretOptionsMap: ${secretOptionsMap.mkString("\n")}")
       prepareEnviroment(vaultHost.get, vaultToken.get, secretOptionsMap)
     }
     else Map()
@@ -45,14 +45,15 @@ object ConfigSecurity extends Logging{
     val extract: ((String, String)) => String = (keyValue: (String, String)) => {
       val (key, value) = keyValue
       key match {
-        case key if key.toLowerCase.contains("hdfs") => "hdfs"
-        case key if key.toLowerCase.contains("kerberos") => "kerberos"
-        case key if key.toLowerCase.contains("spark_tls") => "spark"
-        case key if key.toLowerCase.contains("kafka") => "kafka"
+        case key if key.toLowerCase.contains("spark_security_hdfs") => "hdfs"
+        case key if key.toLowerCase.contains("spark_security_kerberos") => "kerberos"
+        case key if key.toLowerCase.contains("spark_security_spark_tls") => "spark"
+        case key if key.toLowerCase.contains("spark_security_kafka") => "kafka"
         case _ => ""
       }
     }
-    env.groupBy(extract).flatMap{case (key, value) =>
+    env.groupBy(extract).filter(_._2.exists(_._2.contains("enable")))
+      .flatMap{case (key, value) =>
       if (key.nonEmpty) Option((key, value))
       else None
     }
