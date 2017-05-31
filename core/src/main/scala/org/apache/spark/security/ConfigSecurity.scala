@@ -42,19 +42,23 @@ object ConfigSecurity extends Logging{
 
   private def extractSecretFromEnv(env: Map[String, String]): Map[String,
     Map[String, String]] = {
+    val sparkSecurityPrefix = "spark_security_"
     val extract: ((String, String)) => String = (keyValue: (String, String)) => {
-      val (key, value) = keyValue
+      val (key, _) = keyValue
       key match {
-        case key if key.toLowerCase.contains("spark_security_hdfs") => "hdfs"
-        case key if key.toLowerCase.contains("spark_security_kerberos") => "kerberos"
-        case key if key.toLowerCase.contains("spark_security_spark_tls") => "spark"
-        case key if key.toLowerCase.contains("spark_security_kafka") => "kafka"
+        case key if key.toLowerCase.contains(sparkSecurityPrefix + "hdfs") => "hdfs"
+        case key if key.toLowerCase.contains(sparkSecurityPrefix + "kerberos") => "kerberos"
+        case key if key.toLowerCase.contains(sparkSecurityPrefix + "spark_tls") => "spark"
+        case key if key.toLowerCase.contains(sparkSecurityPrefix + "kafka") => "kafka"
         case _ => ""
       }
     }
-    env.groupBy(extract).filter(_._2.exists(_._2.contains("enable")))
+
+    env.groupBy(extract).filter(_._2.exists(_._1.toLowerCase.contains("enable")))
       .flatMap{case (key, value) =>
-      if (key.nonEmpty) Option((key, value))
+      if (key.nonEmpty) Option((key, value.map{case (propKey, propValue) =>
+        (propKey.split(sparkSecurityPrefix.toUpperCase).tail.head, propValue)
+      }))
       else None
     }
   }
