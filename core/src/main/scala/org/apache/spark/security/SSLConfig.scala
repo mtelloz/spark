@@ -17,15 +17,17 @@
 package org.apache.spark.security
 
 import java.io.{ByteArrayInputStream, File, FileOutputStream}
+import java.nio.file.{Files, Paths}
 import java.nio.file.attribute.PosixFilePermissions
-import java.nio.file.{Paths, Files}
 import java.security._
 import java.security.cert.CertificateFactory
 import java.security.spec.RSAPrivateCrtKeySpec
 import javax.xml.bind.DatatypeConverter
 
-import org.apache.spark.internal.Logging
 import sun.security.util.DerInputStream
+
+import org.apache.spark.internal.Logging
+
 
 object SSLConfig extends Logging{
 

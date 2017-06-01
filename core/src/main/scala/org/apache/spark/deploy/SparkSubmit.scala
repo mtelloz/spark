@@ -23,8 +23,6 @@ import java.net.URL
 import java.security.PrivilegedExceptionAction
 import java.text.ParseException
 
-import org.apache.spark.security.ConfigSecurity
-
 import scala.annotation.tailrec
 import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
 import scala.util.Properties
@@ -50,6 +48,7 @@ import org.apache.spark.api.r.RUtils
 import org.apache.spark.deploy.rest._
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.scheduler.{KerberosUser, KerberosUtil}
+import org.apache.spark.security.ConfigSecurity
 import org.apache.spark.util.{ChildFirstURLClassLoader, MutableURLClassLoader, Utils}
 
 /**

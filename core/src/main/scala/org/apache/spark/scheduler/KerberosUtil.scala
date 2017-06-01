@@ -23,8 +23,9 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.mapred.Master
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
-import org.apache.spark.deploy.SparkHadoopUtil
+
 import org.apache.spark.{SparkConf, SparkEnv, SparkException}
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 
 object KerberosUtil  extends Logging {

@@ -29,6 +29,18 @@
   <version>2.1.0</version>
   <packaging>pom</packaging>
   <name>Spark Project Parent POM</name>
+  <distributionManagement>
+        <repository>
+            <id>releases</id>
+            <name>Stratio releases</name>
+            <url>http://sodio.stratio.com/repository/releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>snapshots</id>
+            <name>Stratio snapshots</name>
+            <url>http://sodio.stratio.com/repository/snapshots/</url>
+        </snapshotRepository>
+  </distributionManagement>
   <url>http://spark.apache.org/</url>
   <licenses>
     <license>

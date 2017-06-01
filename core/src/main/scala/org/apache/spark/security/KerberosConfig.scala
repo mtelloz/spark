@@ -16,8 +16,8 @@
  */
 package org.apache.spark.security
 
-import java.nio.file.attribute.PosixFilePermissions
 import java.nio.file.{Files, Paths}
+import java.nio.file.attribute.PosixFilePermissions
 import javax.xml.bind.DatatypeConverter
 
 import org.apache.spark.internal.Logging

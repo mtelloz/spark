@@ -18,13 +18,14 @@ package org.apache.spark.security
 
 import java.io.{BufferedReader, InputStreamReader}
 
+import scala.util.parsing.json.JSON
+
 import org.apache.http.client.HttpClient
-import org.apache.http.client.methods.{HttpGet, HttpRequestBase, HttpUriRequest, HttpPost}
+import org.apache.http.client.methods.{HttpGet, HttpPost, HttpRequestBase, HttpUriRequest}
 import org.apache.http.entity.StringEntity
 import org.apache.http.impl.client.HttpClientBuilder
-import org.apache.spark.internal.Logging
 
-import scala.util.parsing.json.JSON
+import org.apache.spark.internal.Logging
 
 object VaultHelper extends Logging {
 
