@@ -47,8 +47,8 @@ import org.apache.spark.{SPARK_BRANCH, SPARK_BUILD_DATE, SPARK_BUILD_USER, SPARK
 import org.apache.spark.api.r.RUtils
 import org.apache.spark.deploy.rest._
 import org.apache.spark.launcher.SparkLauncher
-import org.apache.spark.scheduler.{KerberosUser, KerberosUtil}
 import org.apache.spark.security.ConfigSecurity
+import org.apache.spark.scheduler.{KerberosUser, KerberosUtil}
 import org.apache.spark.util.{ChildFirstURLClassLoader, MutableURLClassLoader, Utils}
 
 /**
@@ -659,8 +659,8 @@ object SparkSubmit {
       val vaultTempToken = args.sparkProperties.get("spark.secret.vault.tempToken")
       val enviroment = ConfigSecurity.prepareEnviroment(vaultTempToken,
         args.sparkProperties.get("spark.secret.vault.host"))
-      val principal = enviroment.get("principal").getOrElse(null)
-      val keytab = enviroment.get("keytabPath").getOrElse(null)
+      val principal = enviroment.get("principal").getOrElse(args.principal)
+      val keytab = enviroment.get("keytabPath").getOrElse(args.keytab)
       enviroment.filter(keyValue => {
         val (key, _) = keyValue
         key.contains("location") || key.contains("password")
