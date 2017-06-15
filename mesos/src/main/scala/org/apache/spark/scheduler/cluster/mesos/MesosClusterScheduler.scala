@@ -384,6 +384,10 @@ private[spark] class MesosClusterScheduler(
     env.foreach { case (k, v) =>
       envBuilder.addVariables(Variable.newBuilder().setName(k).setValue(v))
     }
+    if (desc.conf.getOption("spark.mesos.driver.docker.network.name").isDefined) {
+      envBuilder.addVariables(Variable.newBuilder()
+        .setName("SPARK_VIRTUAL_USER_NETWORK").setValue("true"))
+    }
     envBuilder.build()
   }
 
