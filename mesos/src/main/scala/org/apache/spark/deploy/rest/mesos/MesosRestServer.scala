@@ -23,9 +23,9 @@ import java.util.{Date, Locale}
 import java.util.concurrent.atomic.AtomicLong
 import javax.servlet.http.HttpServletResponse
 
-import org.apache.spark.{SPARK_VERSION => sparkVersion, SparkConf}
+import org.apache.spark.{SparkConf, SPARK_VERSION => sparkVersion}
 import org.apache.spark.deploy.Command
-import org.apache.spark.deploy.mesos.MesosDriverDescription
+import org.apache.spark.deploy.mesos.{MesosClusterDispatcher, MesosDriverDescription}
 import org.apache.spark.deploy.rest._
 import org.apache.spark.scheduler.cluster.mesos.MesosClusterScheduler
 import org.apache.spark.security.VaultHelper
@@ -58,6 +58,9 @@ private[mesos] class MesosSubmitRequestServlet(
     conf: SparkConf)
   extends SubmitRequestServlet {
 
+  private lazy val appRoleToken =
+    scala.io.Source.fromFile(
+      conf.get("spark.mesos.secret.dispatcher.dynamic.authentication.path")).getLines.next
   private val DEFAULT_SUPERVISE = false
   private val DEFAULT_MEMORY = Utils.DEFAULT_DRIVER_MEM_MB // mb
   private val DEFAULT_CORES = 1.0
@@ -104,18 +107,20 @@ private[mesos] class MesosSubmitRequestServlet(
     val sparkJavaOpts = Utils.sparkJavaOpts(conf)
     val javaOpts = sparkJavaOpts ++ extraJavaOpts
 
-    val sparkPropertiesToSend = if (sparkProperties.get("spark.secret.vault.token").isDefined) {
+    val sparkPropertiesToSend = if (sparkProperties.get("spark.secret.vault.role").isDefined) {
       if (sparkProperties.isDefinedAt("spark.secret.vault.host")) {
         val vaultUrl = sparkProperties("spark.secret.vault.host")
-        val vaultToken = sparkProperties("spark.secret.vault.token")
+        val role = sparkProperties("spark.secret.vault.role")
+        val vaultToken = VaultHelper.getTokenFromAppRole(vaultUrl,
+          appRoleToken, role)
         val temporalToken = VaultHelper.getTemporalToken(vaultUrl, vaultToken)
-        logDebug(s"Vault Temp token $temporalToken")
+        logTrace(s"login in vault using app: $temporalToken and role: $role")
 
         Map("spark.secret.vault.tempToken" -> temporalToken) ++ request.sparkProperties
           .filter(_._1 != "spark.secret.vault.token")
       }
       else {
-        logDebug("Vault token provided but non vault host" +
+        logDebug("Vault appRole provided but non vault host" +
           " had been provided, skipping vault calling")
         request.sparkProperties
       }

@@ -29,8 +29,43 @@ import org.apache.spark.internal.Logging
 
 object VaultHelper extends Logging {
 
-  lazy val jsonTemplate: String = "{ \"token\" : \"_replace_\" }"
+  lazy val jsonTempTokenTemplate: String = "{ \"token\" : \"_replace_\" }"
+  lazy val jsonRoleSecretTemplate: String = "{ \"role_id\" : \"_replace_role_\"," +
+    " \"secret_id\" : \"_replace_secret_\"}"
   lazy val client: HttpClient = HttpClientBuilder.create().build()
+
+  def getTokenFromAppRole(vaultHost: String,
+                          appRoleToken: String,
+                          role: String): String = {
+    val requestUrl = s"$vaultHost/v1/auth/approle/login"
+    logDebug(s"Requesting login from app and role: $requestUrl")
+    val post = new HttpPost(requestUrl)
+    post.addHeader("X-Vault-Token", appRoleToken)
+    post.setEntity(new StringEntity(jsonRoleSecretTemplate.replace(
+      "_replace_role_", getRoleIdFromVault(vaultHost, appRoleToken, role))
+      .replace("_replace_secret_", getSecretIdFromVault(vaultHost, appRoleToken, role))))
+
+    getContentFromResponse(post, "auth")("client_token").asInstanceOf[String]
+  }
+
+  private def getRoleIdFromVault(vaultHost: String,
+                                 appRoleToken: String,
+                                 role: String): String = {
+    val requestUrl = s"$vaultHost/v1/auth/approle/role/$role/role-id"
+    logDebug(s"Requesting Role ID from Vault: $requestUrl")
+    getContentFromResponse(getFromVault(requestUrl, appRoleToken),
+      "data")("role_id").asInstanceOf[String]
+  }
+
+  private def getSecretIdFromVault(vaultHost: String,
+                                   appRoleToken: String,
+                                   role: String): String = {
+    val requestUrl = s"$vaultHost/v1/auth/approle/role/$role/secret-id"
+    logDebug(s"Requesting Secret ID from Vault: $requestUrl")
+    val post = new HttpPost(requestUrl)
+    post.addHeader("X-Vault-Token", appRoleToken)
+    getContentFromResponse(post, "data")("secret_id").asInstanceOf[String]
+  }
 
   def getTemporalToken(vaultHost: String, token: String): String = {
     val requestUrl = s"$vaultHost/v1/sys/wrapping/wrap"
@@ -38,7 +73,7 @@ object VaultHelper extends Logging {
     val post = new HttpPost(requestUrl)
     post.addHeader("X-Vault-Token", token)
     post.addHeader("X-Vault-Wrap-TTL", "2000s")
-    post.setEntity(new StringEntity(jsonTemplate.replace("_replace_", token)))
+    post.setEntity(new StringEntity(jsonTempTokenTemplate.replace("_replace_", token)))
 
     getContentFromResponse(post, "wrap_info")("token").asInstanceOf[String]
   }
@@ -101,6 +136,14 @@ object VaultHelper extends Logging {
     data("pass").asInstanceOf[String]
   }
 
+  private[security] def getRealToken(vaultUrl: String, token: String): String = {
+    val requestUrl = s"$vaultUrl/v1/sys/wrapping/unwrap"
+    logDebug(s"Requesting real Token: $requestUrl")
+    val post = new HttpPost(requestUrl)
+    post.addHeader("X-Vault-Token", token)
+
+    getContentFromResponse(post, "data")("token").asInstanceOf[String]
+  }
 
   private def getContentFromResponse(uriRequest: HttpUriRequest,
                                      parentField: String): Map[String, Any] = {
@@ -109,11 +152,9 @@ object VaultHelper extends Logging {
     val rd = new BufferedReader(
       new InputStreamReader(response.getEntity().getContent()))
 
-
     val json = JSON.parseFull(Stream.continually(rd.readLine()).takeWhile(_ != null).mkString).
       get.asInstanceOf[Map[String, Any]]
-    // TODO change this to Trace
-    logDebug(s"getFrom Vault ${json.mkString("\n")}")
+    logTrace(s"getFrom Vault ${json.mkString("\n")}")
     if(response.getStatusLine.getStatusCode != 200) {
       val errors = json("errors").asInstanceOf[List[String]].mkString("\n")
       throw new RuntimeException(errors)
@@ -123,15 +164,6 @@ object VaultHelper extends Logging {
     }
   }
 
-
-  private[security] def getRealToken(vaultUrl: String, token: String): String = {
-    val requestUrl = s"$vaultUrl/v1/sys/wrapping/unwrap"
-    logDebug(s"Requesting real Token: $requestUrl")
-    val post = new HttpPost(requestUrl)
-    post.addHeader("X-Vault-Token", token)
-
-    getContentFromResponse(post, "data")("token").asInstanceOf[String]
-  }
 
   private def getFromVault(vaultUrl: String,
                            vaultToken: String): HttpRequestBase = {

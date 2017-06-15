@@ -37,6 +37,9 @@ function add_if_non_empty() {
 function configure_properties() {
 
     echo '' > /opt/spark/dist/conf/mesos-cluster-dispatcher.properties
+    if [ "${SPARK_DYNAMIC_AUTHENTICATION_PATH}" != "" ]; then
+    echo "spark.mesos.secret.dispatcher.dynamic.authentication.path=${SPARK_DYNAMIC_AUTHENTICATION_PATH}" >> /opt/spark/dist/conf/mesos-cluster-dispatcher.properties
+    fi
     # write defaults
     if [ "${DCOS_SERVICE_ACCOUNT_CREDENTIAL}" != "" ]; then
         # write defaults using both property names, since 2.0 uses one and 2.1 uses the other
