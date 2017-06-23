@@ -45,6 +45,15 @@ private[spark] class MesosRestServer(
     scheduler: MesosClusterScheduler)
   extends RestSubmissionServer(host, requestedPort, masterConf) {
 
+  protected lazy val token = {
+    require(masterConf.getOption("spark.secret.vault.host").isDefined,
+      "You are attempt a login in Vault but no vault obtained," +
+      " please confiure spark.vault.host in your Stratio Spark Dispatcher instance")
+    VaultHelper.getTokenFromAppRole(masterConf.getOption("spark.secret.vault.host").get,
+      sys.env("VAULT_ROLE_ID"),
+      sys.env("VAULT_SECRET_ID"))
+  }
+
   protected override val submitRequestServlet =
     new MesosSubmitRequestServlet(scheduler, masterConf)
   protected override val killRequestServlet =
@@ -58,9 +67,7 @@ private[mesos] class MesosSubmitRequestServlet(
     conf: SparkConf)
   extends SubmitRequestServlet {
 
-  private lazy val appRoleToken =
-    scala.io.Source.fromFile(
-      conf.get("spark.mesos.secret.dispatcher.dynamic.authentication.path")).getLines.next
+  private lazy val vaultHost = conf.getOption("spark.vault.host")
   private val DEFAULT_SUPERVISE = false
   private val DEFAULT_MEMORY = Utils.DEFAULT_DRIVER_MEM_MB // mb
   private val DEFAULT_CORES = 1.0
@@ -111,13 +118,11 @@ private[mesos] class MesosSubmitRequestServlet(
       if (sparkProperties.isDefinedAt("spark.secret.vault.host")) {
         val vaultUrl = sparkProperties("spark.secret.vault.host")
         val role = sparkProperties("spark.secret.vault.role")
-        val vaultToken = VaultHelper.getTokenFromAppRole(vaultUrl,
-          appRoleToken, role)
-        val temporalToken = VaultHelper.getTemporalToken(vaultUrl, vaultToken)
-        logTrace(s"login in vault using app: $temporalToken and role: $role")
+        val driverSecretId = VaultHelper.getSecretIdFromVault(vaultUrl, role)
+        val driverRoleId = VaultHelper.getRoleIdFromVault(vaultUrl, role)
 
-        Map("spark.secret.vault.tempToken" -> temporalToken) ++ request.sparkProperties
-          .filter(_._1 != "spark.secret.vault.token")
+        Map("spark.secret.roleID" -> driverRoleId,
+          "spark.secret.secretID" -> driverSecretId) ++ request.sparkProperties
       }
       else {
         logDebug("Vault appRole provided but non vault host" +

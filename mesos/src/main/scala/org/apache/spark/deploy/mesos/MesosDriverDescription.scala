@@ -57,10 +57,12 @@ private[spark] class MesosDriverDescription(
       cores: Double = cores,
       supervise: Boolean = supervise,
       command: Command = command,
-      schedulerProperties: SparkConf = conf,
+      schedulerProperties: Map[String, String] = conf.getAll.toMap,
       submissionId: String = submissionId,
       submissionDate: Date = submissionDate,
       retryState: Option[MesosClusterRetryState] = retryState): MesosDriverDescription = {
+    val conf = new SparkConf(false)
+    schedulerProperties.foreach {case (k, v) => conf.set(k, v)}
 
     new MesosDriverDescription(name, jarUrl, mem, cores, supervise, command, conf.getAll.toMap,
       submissionId, submissionDate, retryState)

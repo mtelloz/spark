@@ -23,16 +23,15 @@ import java.util.{Collections, Date, List => JList}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-
 import org.apache.mesos.{Scheduler, SchedulerDriver}
 import org.apache.mesos.Protos.{TaskState => MesosTaskState, _}
 import org.apache.mesos.Protos.Environment.Variable
 import org.apache.mesos.Protos.TaskStatus.Reason
-
 import org.apache.spark.{SecurityManager, SparkConf, SparkException, TaskState}
 import org.apache.spark.deploy.mesos.MesosDriverDescription
 import org.apache.spark.deploy.rest.{CreateSubmissionResponse, KillSubmissionResponse, SubmissionStatusResponse}
 import org.apache.spark.metrics.MetricsSystem
+import org.apache.spark.security.VaultHelper
 import org.apache.spark.util.Utils
 
 /**
@@ -681,8 +680,18 @@ private[spark] class MesosClusterScheduler(
             .map { rs => (rs.retries + 1, Math.min(maxRetryWaitTime, rs.waitTime * 2)) }
             .getOrElse{ (1, 1) }
           val nextRetry = new Date(new Date().getTime + waitTimeSec * 1000L)
+          val sparkProperties = state.driverDescription.conf.getAll.toMap
 
-          val newDriverDescription = state.driverDescription.copy(
+          val vaultUrl = sparkProperties("spark.secret.vault.host")
+          val role = sparkProperties("spark.secret.vault.role")
+          val driverSecretId = VaultHelper.getSecretIdFromVault(vaultUrl, role)
+          val driverRoleId = VaultHelper.getRoleIdFromVault(vaultUrl, role)
+
+          val newConf = state.driverDescription.conf.getAll.toMap
+            .updated("spark.secret.roleID", driverRoleId)
+            .updated("spark.secret.secretID", driverSecretId)
+
+          val newDriverDescription = state.driverDescription.copy(schedulerProperties = newConf,
             retryState = Some(new MesosClusterRetryState(status, retries, nextRetry, waitTimeSec)))
           pendingRetryDrivers += newDriverDescription
           pendingRetryDriversState.persist(taskId, newDriverDescription)

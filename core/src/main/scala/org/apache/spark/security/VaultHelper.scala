@@ -20,39 +20,49 @@ import org.apache.spark.internal.Logging
 
 object VaultHelper extends Logging {
 
+  var token: Option[String] = None
   lazy val jsonTempTokenTemplate: String = "{ \"token\" : \"_replace_\" }"
   lazy val jsonRoleSecretTemplate: String = "{ \"role_id\" : \"_replace_role_\"," +
     " \"secret_id\" : \"_replace_secret_\"}"
 
   def getTokenFromAppRole(vaultHost: String,
-                          appRoleToken: String,
-                          role: String): String = {
+                          roleId: String,
+                          secretId: String): String = {
     val requestUrl = s"$vaultHost/v1/auth/approle/login"
     logDebug(s"Requesting login from app and role: $requestUrl")
-    val roleId = getRoleIdFromVault(vaultHost, appRoleToken, role))
-    val secretId = getSecretIdFromVault(vaultHost, appRoleToken, role)
     val jsonAppRole = jsonRoleSecretTemplate.replace("_replace_role_", roleId
-      .replace("_replace_secret_", secretId)))
+      .replace("_replace_secret_", secretId))
     HTTPHelper.executePost(requestUrl, "auth",
-      Some(Seq(("X-Vault-Token", appRoleToken))), Some(jsonAppRole))("client_token").asInstanceOf[String]
+      None, Some(jsonAppRole))("client_token").asInstanceOf[String]
   }
 
-  private def getRoleIdFromVault(vaultHost: String,
-                                 appRoleToken: String,
-                                 role: String): String = {
+  def getRoleIdFromVault(vaultHost: String,
+                         role: String): String = {
     val requestUrl = s"$vaultHost/v1/auth/approle/role/$role/role-id"
+    if (!token.isDefined) token = {
+      logDebug(s"Requesting token from app role:")
+      Option(VaultHelper.getTokenFromAppRole(vaultHost,
+        sys.env("VAULT_ROLE_ID"),
+        sys.env("VAULT_SECRET_ID")))
+    }
     logDebug(s"Requesting Role ID from Vault: $requestUrl")
     HTTPHelper.executeGet(requestUrl, "data",
-      Some(Seq(("X-Vault-Token", appRoleToken))))("role_id").asInstanceOf[String]
+      Some(Seq(("X-Vault-Token", token.get))))("role_id").asInstanceOf[String]
   }
 
-  private def getSecretIdFromVault(vaultHost: String,
-                                   appRoleToken: String,
-                                   role: String): String = {
+  def getSecretIdFromVault(vaultHost: String,
+                           role: String): String = {
     val requestUrl = s"$vaultHost/v1/auth/approle/role/$role/secret-id"
+    if (!token.isDefined) token = {
+      logDebug(s"Requesting token from app role:")
+      Option(VaultHelper.getTokenFromAppRole(vaultHost,
+        sys.env("VAULT_ROLE_ID"),
+        sys.env("VAULT_SECRET_ID")))
+    }
+
     logDebug(s"Requesting Secret ID from Vault: $requestUrl")
     HTTPHelper.executePost(requestUrl, "data",
-      Some(Seq(("X-Vault-Token", appRoleToken))))("secret_id").asInstanceOf[String]
+      Some(Seq(("X-Vault-Token", token.get))))("secret_id").asInstanceOf[String]
     }
 
   def getTemporalToken(vaultHost: String, token: String): String = {
