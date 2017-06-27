@@ -86,7 +86,7 @@ object VaultHelper extends Logging {
     (keytab64, principal)
   }
 
-  def getCertListFromVault(vaultUrl: String, token: String): String = {
+  def getRootCA(vaultUrl: String, token: String): String = {
     val certVaultPath = "/v1/ca-trust/certificates/"
     val requestUrl = s"$vaultUrl/$certVaultPath"
     val listCertKeysVaultPath = s"$requestUrl?list=true"
@@ -140,7 +140,7 @@ object VaultHelper extends Logging {
       "data", Some(Seq(("X-Vault-Token", token))))("token").asInstanceOf[String]
   }
 
-  private[security] def getRealToken(vaultUrl: String, token: String): String = {
+  def getRealToken(vaultUrl: String, token: String): String = {
     val requestUrl = s"$vaultUrl/v1/sys/wrapping/unwrap"
     logDebug(s"Requesting real Token: $requestUrl")
     HTTPHelper.executePost(requestUrl,

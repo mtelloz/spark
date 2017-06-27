@@ -117,12 +117,13 @@ private[mesos] class MesosSubmitRequestServlet(
     val sparkPropertiesToSend = if (sparkProperties.get("spark.secret.vault.role").isDefined) {
       if (sparkProperties.isDefinedAt("spark.secret.vault.host")) {
         val vaultUrl = sparkProperties("spark.secret.vault.host")
-        val role = sparkProperties("spark.secret.vault.role")
+        val role = sparkProperties.get("spark.secret.vault.role").getOrElse(sys.env("VAULT_ROLE"))
+        logTrace(s"obtaining vault secretID and role ID using role: $role")
         val driverSecretId = VaultHelper.getSecretIdFromVault(vaultUrl, role)
         val driverRoleId = VaultHelper.getRoleIdFromVault(vaultUrl, role)
 
-        Map("spark.secret.roleID" -> driverRoleId,
-          "spark.secret.secretID" -> driverSecretId) ++ request.sparkProperties
+        Map("spark.mesos.driverEnv.VAULT_ROLE_ID" -> driverRoleId,
+          "spark.mesos.driverEnv.VAULT_SECRET_ID" -> driverSecretId) ++ request.sparkProperties
       }
       else {
         logDebug("Vault appRole provided but non vault host" +
