@@ -1,19 +1,19 @@
-  /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/*
+* Licensed to the Apache Software Foundation (ASF) under one or more
+* contributor license agreements.  See the NOTICE file distributed with
+* this work for additional information regarding copyright ownership.
+* The ASF licenses this file to You under the Apache License, Version 2.0
+* (the "License"); you may not use this file except in compliance with
+* the License.  You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 package org.apache.spark.security
 
 import java.io.{ByteArrayInputStream, File, FileOutputStream}
@@ -30,21 +30,26 @@ import org.apache.spark.internal.Logging
 
 object SSLConfig extends Logging{
 
-  val sslTypeKafka = "KAFKA"
-  val sslTypeSpark = "SPARK"
+  val sslTypeDataStore = "DATASTORE"
+  val sslTypeKafkaStore = "KAFKA"
 
-  def prepareEnviroment(vaultHost: String,
-                        vaultToken: String,
-                        sslType: String,
-                        options: Map[String, String]): Map[String, String] = {
-    val certList = VaultHelper.getCertListFromVault(vaultHost, vaultToken)
+  def prepareEnvironment(vaultHost: String,
+                         vaultToken: String,
+                         sslType: String,
+                         options: Map[String, String]): Map[String, String] = {
+    val rootCA = VaultHelper.getRootCA(vaultHost, vaultToken)
+    val rootCAPath = writeRootCA(rootCA)
     val certPass = VaultHelper.getCertPassFromVault(vaultHost, vaultToken)
-    val truststorePath = generateTrustStore(sslType, certList, certPass)
+    val trustStorePath = generateTrustStore(sslType, rootCA, certPass)
+
+    logInfo(s"Setting SSL values for $sslType")
 
     val trustStoreOptions =
-      Map(s"spark.secret.${sslType.toLowerCase}.security.protocol" -> "SSL",
-        s"spark.secret.${sslType.toLowerCase}.ssl.truststore.location" -> truststorePath,
-        s"spark.secret.${sslType.toLowerCase}.ssl.truststore.password" -> certPass)
+      Map(s"spark.ssl.${sslType.toLowerCase}.enabled" -> "true",
+        s"spark.ssl.${sslType.toLowerCase}.trustStore" -> trustStorePath,
+        s"spark.ssl.${sslType.toLowerCase}.trustStorePassword" -> certPass,
+        s"spark.ssl.${sslType.toLowerCase}.rootCaPath" -> rootCAPath,
+        s"spark.ssl.${sslType.toLowerCase}.security.protocol" -> "SSL")
 
     val vaultKeystorePath = options.get(s"${sslType}_VAULT_CERT_PATH")
 
@@ -60,21 +65,29 @@ object SSLConfig extends Logging{
 
       val keyStorePath = generateKeyStore(sslType, certs, key, pass)
 
-      Map(s"spark.secret.${sslType.toLowerCase}.ssl.keyStore.location" -> keyStorePath,
-        s"spark.secret.${sslType.toLowerCase}.ssl.keyStore.password" -> pass)
+      Map(s"spark.ssl${sslType.toLowerCase}.keyStore" -> keyStorePath,
+        s"spark.ssl${sslType.toLowerCase}.keyStorePassword" -> pass,
+        s"spark.ssl${sslType.toLowerCase}.protocol" -> "TLSv1.2",
+        s"spark.ssl${sslType.toLowerCase}.needClientAuth" -> "true"
+      )
 
     } else {
-      logInfo(s"tying to get ssl secrets from vaul for ${sslType.toLowerCase} keyStore" +
-        s" but not found pass and cert vault paths, skipping")
+      logInfo(s"trying to get ssl secrets from vault for ${sslType.toLowerCase} keyStore" +
+        s" but not found pass and cert vault paths, exiting")
       Map[String, String]()
     }
 
     val vaultKeyPassPath = options.get(s"${sslType}_VAULT_KEY_PASS_PATH")
 
-    val keyPass = Map(s"spark.secret.${sslType.toLowerCase}.ssl.key.password"
+    val keyPass = Map(s"spark.ssl.${sslType.toLowerCase}.keyPassword"
       -> VaultHelper.getCertPassForAppFromVault(vaultHost, vaultKeyPassPath.get, vaultToken))
 
-    trustStoreOptions ++ keyStoreOptions ++ keyPass
+    val certFilesPath =
+      Map("spark.ssl.cert.path" -> s"${sys.env.get("SPARK_SSL_CERT_PATH")}/cert.crt",
+        "spark.ssl.key.pkcs8" -> s"${sys.env.get("SPARK_SSL_CERT_PATH")}/key.pkcs8",
+        "spark.ssl.root.cert" -> s"${sys.env.get("SPARK_SSL_CERT_PATH")}/caroot.crt")
+
+    trustStoreOptions ++ keyStoreOptions ++ keyPass ++ certFilesPath
   }
 
   private def generateTrustStore(sslType: String, cas: String, password: String): String = {
@@ -104,9 +117,9 @@ object SSLConfig extends Logging{
 
   // TODO Improvent get passwords keys and jks key
   def generateKeyStore(sslType: String,
-                               cas: String,
-                               firstCA: String,
-                               password: String): String = {
+                       cas: String,
+                       firstCA: String,
+                       password: String): String = {
     def generatePrivateKeyFromDER(keyCA: String): PrivateKey = {
 
       val keyBytes = getBase64FromCAs(keyCA).head
@@ -178,5 +191,30 @@ object SSLConfig extends Logging{
     pattern.map(value => {
       DatatypeConverter.parseBase64Binary(value)
     })
+  }
+
+  def writeRootCA(rootCA: String): String = {
+    def getCertFromOnLine(certBadFormat: String): String = {
+      var text1 = certBadFormat
+      var arg = Seq[String]()
+      while (text1.size != 0) {
+        val (toStore, toUpdate) = text1.splitAt(64)
+        text1 = toUpdate
+        arg = arg ++ Seq(toStore)
+      }
+      arg.mkString("\n")
+    }
+
+    val path = "/tmp/root.crt"
+    val splitter = rootCA.split("BEGIN").head
+    val Array(_, head, certBadFormat, tail) = rootCA.split(splitter)
+    val cert = getCertFromOnLine(certBadFormat)
+    val writableCert = Seq(s"$splitter$head$splitter", cert, s"$splitter$tail$splitter")
+      .mkString("\n")
+    val downloadFile = Files.createFile(Paths.get(path),
+      PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+    downloadFile.toFile.deleteOnExit()
+    Files.write(downloadFile, writableCert.getBytes)
+    path
   }
 }

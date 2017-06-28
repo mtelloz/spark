@@ -657,14 +657,11 @@ object SparkSubmit {
     val (pincipal, keytab) = if (
       args.sparkProperties.get("spark.secret.vault.tempToken").isDefined) {
       val vaultTempToken = args.sparkProperties.get("spark.secret.vault.tempToken")
-      val enviroment = ConfigSecurity.prepareEnviroment(vaultTempToken,
+      val enviroment = ConfigSecurity.prepareEnvironment(vaultTempToken,
         args.sparkProperties.get("spark.secret.vault.host"))
       val principal = enviroment.get("principal").getOrElse(args.principal)
       val keytab = enviroment.get("keytabPath").getOrElse(args.keytab)
-      enviroment.filter(keyValue => {
-        val (key, _) = keyValue
-        key.contains("location") || key.contains("password")
-      }).foreach{case (key, value) => sysProps.put(key, value)}
+      enviroment.foreach{case (key, value) => sysProps.put(key, value)}
       (principal, keytab)
     } else (args.principal, args.keytab)
 

@@ -5,16 +5,21 @@ hose {
     SLACKTEAM = 'stratiosecurity'
     MODULE = 'stratio-spark'
     REPOSITORY = 'spark'
-    BUILDTOOL = 'make'
-    DEVTIMEOUT = 40
-    RELEASETIMEOUT = 40
-    PKGMODULESNAMES = ['spark-stratio-develop']
+    DEVTIMEOUT = 300
+    RELEASETIMEOUT = 200
+    BUILDTOOLVERSION = '3.5.0'
+    PKGMODULESNAMES = ['stratio-spark']
 
     DEV = { config ->
 
         doPackage(config)
-	doDocker(conf: config, dockerfile:"DockerfileDispatcher")
-        doDocker(conf: config, dockerfile:"DockerfileHistory", image:"spark-stratio-history-server-develop")
-
+       // doUT(config)
+        parallel(DOCKER1: {
+                    doDocker(conf: config, dockerfile:"DockerfileDispatcher")
+                }, DEPLOY: {
+                    doDeploy(config)
+                }, DOCKER2: {
+                     doDocker(conf: config, dockerfile:"DockerfileHistory", image:"spark-stratio-history-server")
+        }, failFast: config.FAILFAST)
      }
 }

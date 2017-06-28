@@ -13,6 +13,36 @@ if [ "${SPARK_VIRTUAL_USER_NETWORK}" != "" ]; then
    export LIBPROCESS_IP=$HOST
 fi
 
+if [ "${SPARK_SSL_SECURITY_ENABLED}" == "true" ]; then
+    source /opt/spark/dist/kms_utils-0.2.1.sh
+
+    VAULT_HOSTS=$VAULT_HOST
+    export SPARK_SSL_CERT_PATH="/tmp"
+    SERVICE_ID=$APP_NAME
+    INSTANCE=$APP_NAME
+
+    #0--- IF VAULT_ROLE_ID IS NOT EMPTY [!-z $YOUR_VAR] IT MEANS THAT WE ARE DEALING WITH SPARK DRIVER
+    if [! -z "$VAULT_ROLE_ID"]; then
+        login
+    else
+        #1--- FROM TEMP TOKEN GET APP TOKEN
+        VAULT_TOKEN=$(curl -k -L -XPOST -H "X-Vault-Token:$VAULT_TEMP_TOKEN" "$VAULT_HOSTS/v1/sys/wrapping/unwrap" -s| python -m json.tool | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["data"]["token"]')
+    fi
+
+    #2--- GET SECRETS WITH APP TOKEN
+    getCert "userland" "$INSTANCE" "$SERVICE_ID" "PEM" $SPARK_SSL_CERT_PATH
+    getCAbundle $SPARK_SSL_CERT_PATH "PEM"
+
+    #3--- RESTORE TEMP TOKEN
+    export VAULT_TEMP_TOKEN=$(curl -k -L -XPOST -H "X-Vault-Wrap-TTL: 6000" -H "X-Vault-Token:$VAULT_TOKEN" -d "{\"token\": \"$VAULT_TOKEN\" }" "$VAULT_HOSTS/v1/sys/wrapping/wrap" -s| python -m json.tool | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["wrap_info"]["token"]')
+
+    openssl pkcs8 -topk8 -inform pem -in "${SPARK_SSL_CERT_PATH}/${SERVICE_ID}.key" -outform der -nocrypt -out "${SPARK_SSL_CERT_PATH}/pkcs8.key"
+
+    mv $SPARK_SSL_CERT_PATH/${SERVICE_ID}.pem $SPARK_SSL_CERT_PATH/cert.crt
+    mv $SPARK_SSL_CERT_PATH/ca-bundle.pem $SPARK_SSL_CERT_PATH/caroot.crt
+
+fi
+
 # I first set this to MESOS_SANDBOX, as a Workaround for MESOS-5866
 # But this fails now due to MESOS-6391, so I'm setting it to /tmp
 MESOS_DIRECTORY=/tmp

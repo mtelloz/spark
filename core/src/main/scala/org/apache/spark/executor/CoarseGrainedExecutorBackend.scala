@@ -288,7 +288,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       appId == null) {
       printUsageAndExit()
     }
-    ConfigSecurity.prepareEnviroment(Option(System.getenv("VAULT_TEMP_TOKEN")))
+    ConfigSecurity.prepareEnvironment(Option(System.getenv("VAULT_TEMP_TOKEN")))
     run(driverUrl, executorId, hostname, cores, appId, workerUrl, userClassPath)
     System.exit(0)
   }

@@ -88,10 +88,10 @@ object VaultHelper extends Logging {
     (keytab64, principal)
   }
 
-  def getCertListFromVault(vaultUrl: String, token: String): String = {
+  def getRootCA(vaultUrl: String, token: String): String = {
     val certVaultPath = "/v1/ca-trust/certificates/"
     val listCertKeysVaultPath = s"$certVaultPath?list=true"
-    logDebug(s"Requesting Cert List: $listCertKeysVaultPath")
+    logDebug(s"Requesting Root CA: $listCertKeysVaultPath")
     val get = getFromVault(s"$vaultUrl/$listCertKeysVaultPath", token)
     val keys = getContentFromResponse(get, "data")("keys").asInstanceOf[List[String]]
     keys.flatMap(key => {

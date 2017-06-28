@@ -20,13 +20,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>org.apache</groupId>
-    <artifactId>apache</artifactId>
-    <version>14</version>
+    <groupId>com.stratio</groupId>
+    <artifactId>parent</artifactId>
+    <version>0.9.0</version>
   </parent>
   <groupId>com.stratio.spark</groupId>
   <artifactId>spark-parent_2.11</artifactId>
-  <version>2.1.0</version>
+  <version>2.1.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Spark Project Parent POM</name>
   <url>http://spark.apache.org/</url>
@@ -112,6 +112,7 @@
     <module>external/kafka-0-10</module>
     <module>external/kafka-0-10-assembly</module>
     <module>external/kafka-0-10-sql</module>
+    <module>distribution</module>
   </modules>
 
   <properties>
@@ -2569,6 +2570,11 @@
 
     <profile>
       <id>hadoop-2.7</id>
+      <activation>
+          <file>
+              <missing>target/dummy</missing>
+          </file>
+        </activation>
       <properties>
         <hadoop.version>2.7.3</hadoop.version>
         <jets3t.version>0.9.3</jets3t.version>
@@ -2587,6 +2593,11 @@
 
     <profile>
       <id>mesos</id>
+        <activation>
+          <file>
+            <missing>target/dummy</missing>
+          </file>
+        </activation>
       <modules>
         <module>mesos</module>
       </modules>
@@ -2806,6 +2817,11 @@
     </profile>
     <profile>
       <id>sparkr</id>
+       <activation>
+          <file>
+              <missing>target/dummy</missing>
+          </file>
+        </activation>
     </profile>
   </profiles>
 </project>

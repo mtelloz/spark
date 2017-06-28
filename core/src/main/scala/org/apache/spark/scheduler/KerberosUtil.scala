@@ -39,29 +39,31 @@ object KerberosUtil  extends Logging {
 
 
   def getHadoopDelegationTokens : Array[Byte] = {
-    val ugi = proxyUser match {
-      case Some(user) => user
-      case None => UserGroupInformation.getLoginUser
-    }
-    val principal = ugi.getUserName
     val hadoopConf = SparkHadoopUtil.get.conf
-    val namenodes = Set(FileSystem.get(hadoopConf).getHomeDirectory())
-    logInfo(s"Found these HDFS namenodes: $namenodes")
-    val ugiCreds = ugi.getCredentials
-    ugi.doAs(new PrivilegedExceptionAction[Unit] {
-      override def run() = {
-        // use the job principal itself to renew the tokens
-        obtainTokensForNamenodes(namenodes, hadoopConf, ugiCreds, Some(principal))
+    if (hadoopConf.get("hadoop.security.authentication").toLowerCase == "kerberos") {
+      val ugi = proxyUser match {
+        case Some(user) => user
+        case None => UserGroupInformation.getLoginUser
       }
-    })
-    // write tokens into a memory file to transfer it to the executors
-    val tokenBuf = new java.io.ByteArrayOutputStream(1024 * 1024)
-    ugiCreds.writeTokenStorageToStream(new java.io.DataOutputStream(tokenBuf))
-    logDebug(s"Wrote ${tokenBuf.size()} bytes of token data")
 
-    hadoopConf.set("hadoop.security.authentication", "Kerberos")
-    tokenBuf.toByteArray
+      val principal = ugi.getUserName
+      val namenodes = Set(FileSystem.get(hadoopConf).getHomeDirectory())
+      logInfo(s"Found these HDFS namenodes: $namenodes")
+      val ugiCreds = ugi.getCredentials
+      ugi.doAs(new PrivilegedExceptionAction[Unit] {
+        override def run() = {
+          // use the job principal itself to renew the tokens
+          obtainTokensForNamenodes(namenodes, hadoopConf, ugiCreds, Some(principal))
+        }
+      })
+      // write tokens into a memory file to transfer it to the executors
+      val tokenBuf = new java.io.ByteArrayOutputStream(1024 * 1024)
+      ugiCreds.writeTokenStorageToStream(new java.io.DataOutputStream(tokenBuf))
+      logDebug(s"Wrote ${tokenBuf.size()} bytes of token data")
+      tokenBuf.toByteArray
+    } else null
   }
+
   def obtainTokensForNamenodes(
                                 paths: Set[Path],
                                 conf: Configuration,

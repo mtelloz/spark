@@ -23,8 +23,8 @@ object ConfigSecurity extends Logging{
   var vaultToken: Option[String] = None
   var vaultHost: Option[String] = Option(System.getenv("VAULT_HOST"))
 
-  def prepareEnviroment(vaultTempToken: Option[String] = None,
-                        vaulHost: Option[String] = None): Map[String, String] = {
+  def prepareEnvironment(vaultTempToken: Option[String] = None,
+                         vaulHost: Option[String] = None): Map[String, String] = {
 
     logDebug(s"env VAR: ${sys.env.mkString("\n")}")
     val secretOptionsMap = ConfigSecurity.extractSecretFromEnv(sys.env)
@@ -37,7 +37,7 @@ object ConfigSecurity extends Logging{
     if(vaultToken.isDefined) {
       require(vaultHost.isDefined, "A proper vault host is required")
       logDebug(s"env VAR: ${sys.env.mkString("\n")}")
-      prepareEnviroment(vaultHost.get, vaultToken.get, secretOptionsMap)
+      prepareEnvironment(vaultHost.get, vaultToken.get, secretOptionsMap)
     }
     else Map()
   }
@@ -64,14 +64,16 @@ object ConfigSecurity extends Logging{
   private def extractSecretFromEnv(env: Map[String, String]): Map[String,
     Map[String, String]] = {
     val sparkSecurityPrefix = "spark_security_"
+
     val extract: ((String, String)) => String = (keyValue: (String, String)) => {
       val (key, _) = keyValue
       key match {
         case key if key.toLowerCase.contains(sparkSecurityPrefix + "hdfs") => "hdfs"
         case key if key.toLowerCase.contains(sparkSecurityPrefix + "kerberos") => "kerberos"
-        case key if key.toLowerCase.contains(sparkSecurityPrefix + "spark_tls") => "spark"
+        case key if key.toLowerCase.contains(sparkSecurityPrefix + "datastore") => "datastore"
         case key if key.toLowerCase.contains(sparkSecurityPrefix + "kafka") => "kafka"
         case _ => ""
+
       }
     }
 
@@ -96,7 +98,7 @@ object ConfigSecurity extends Logging{
   }
 
 
-  private def prepareEnviroment(vaultHost: String,
+  private def prepareEnvironment(vaultHost: String,
                                 vaultToken: String,
                                 secretOptions: Map[String,
                                   Map[String, String]]): Map[String, String] = {
@@ -107,13 +109,13 @@ object ConfigSecurity extends Logging{
           case "kerberos" => KerberosConfig.prepareEnviroment(vaultHost,
             vaultToken,
             options)
-          case "kafka" => SSLConfig.prepareEnviroment(vaultHost,
+          case "datastore" => SSLConfig.prepareEnvironment(vaultHost,
             vaultToken,
-            SSLConfig.sslTypeKafka,
+            SSLConfig.sslTypeDataStore,
             options)
-          case "spark" => SSLConfig.prepareEnviroment(vaultHost,
+          case "kafka" => SSLConfig.prepareEnvironment(vaultHost,
             vaultToken,
-            SSLConfig.sslTypeSpark,
+            SSLConfig.sslTypeDataStore,
             options)
           case _ => Map[String, String]()
        }

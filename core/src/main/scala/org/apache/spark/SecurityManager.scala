@@ -189,7 +189,6 @@ private[spark] class SecurityManager(
   extends Logging with SecretKeyHolder {
 
   import SecurityManager._
-
   // allow all users/groups to have view/modify permissions
   private val WILDCARD_ACL = "*"
 
@@ -258,24 +257,15 @@ private[spark] class SecurityManager(
 
   // SSL configuration for the file server. This is used by Utils.setupSecureURLConnection().
   val fileServerSSLOptions = getSSLOptions("fs")
-  val (sslSocketFactory, hostnameVerifier) = if (fileServerSSLOptions.enabled) {
-    val trustStoreManagers =
-      for (trustStore <- fileServerSSLOptions.trustStore) yield {
-        val input = Files.asByteSource(fileServerSSLOptions.trustStore.get).openStream()
+  val dataStoreSSLOptions = getSSLOptions("datastore")
 
-        try {
-          val ks = KeyStore.getInstance(KeyStore.getDefaultType)
-          ks.load(input, fileServerSSLOptions.trustStorePassword.get.toCharArray)
+  val (sslSocketFactory, hostnameVerifier) =
+    if (fileServerSSLOptions.enabled || dataStoreSSLOptions.enabled) {
 
-          val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm)
-          tmf.init(ks)
-          tmf.getTrustManagers
-        } finally {
-          input.close()
-        }
-      }
+      val trustStoreManagers = getTrustStoreManager(fileServerSSLOptions.enabled,
+        dataStoreSSLOptions.enabled, fileServerSSLOptions, dataStoreSSLOptions)
 
-    lazy val credulousTrustStoreManagers = Array({
+      lazy val credulousTrustStoreManagers = Array({
       logWarning("Using 'accept-all' trust manager for SSL connections.")
       new X509TrustManager {
         override def getAcceptedIssuers: Array[X509Certificate] = null
@@ -286,19 +276,84 @@ private[spark] class SecurityManager(
       }: TrustManager
     })
 
-    require(fileServerSSLOptions.protocol.isDefined,
+    require(fileServerSSLOptions.protocol.isDefined || dataStoreSSLOptions.protocol.isDefined,
       "spark.ssl.protocol is required when enabling SSL connections.")
 
-    val sslContext = SSLContext.getInstance(fileServerSSLOptions.protocol.get)
-    sslContext.init(null, trustStoreManagers.getOrElse(credulousTrustStoreManagers), null)
-
-    val hostVerifier = new HostnameVerifier {
+      val sslContext =
+        if (fileServerSSLOptions.enabled && fileServerSSLOptions.protocol.isDefined) {
+          logInfo("Initializing SSL Context for FileServer")
+          SSLContext.getInstance(fileServerSSLOptions.protocol.get)
+        } else {
+          logInfo("Initializing SSL Context for Datastore")
+          SSLContext.getInstance(dataStoreSSLOptions.protocol.get)
+        }
+      sslContext.init(null, trustStoreManagers.getOrElse(credulousTrustStoreManagers), null)
+      val hostVerifier = new HostnameVerifier {
       override def verify(s: String, sslSession: SSLSession): Boolean = true
     }
 
     (Some(sslContext.getSocketFactory), Some(hostVerifier))
   } else {
-    (None, None)
+      (None, None)
+  }
+
+  def getTrustStoreManager (fsEnabled: Boolean, dsEnabled: Boolean,
+                            fsSSLOptions : SSLOptions,
+                            dsSSLOptions : SSLOptions): Option[Array[TrustManager]] = {
+    (fsEnabled, dsEnabled) match {
+      case (true, false) =>
+        for (trustStore <- fsSSLOptions.trustStore) yield {
+          val input = Files.asByteSource(fsSSLOptions.trustStore.get).openStream()
+
+          try {
+            val ks = KeyStore.getInstance(KeyStore.getDefaultType)
+            ks.load(input, fsSSLOptions.trustStorePassword.get.toCharArray)
+
+            val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm)
+            tmf.init(ks)
+            tmf.getTrustManagers
+          } finally {
+            input.close()
+          }
+        }
+      case (true, true) =>
+        if (fsSSLOptions.trustStore.isDefined && dsSSLOptions.trustStore.isDefined) {
+          val inputFS = Files.asByteSource(fileServerSSLOptions.trustStore.get).openStream()
+          val inputDS = Files.asByteSource(dsSSLOptions.trustStore.get).openStream()
+
+          try {
+            val ks = KeyStore.getInstance(KeyStore.getDefaultType)
+            ks.load(inputFS, fsSSLOptions.trustStorePassword.get.toCharArray)
+            ks.load(inputDS, dsSSLOptions.trustStorePassword.get.toCharArray)
+
+            val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm)
+            tmf.init(ks)
+            Option(tmf.getTrustManagers)
+          } finally {
+            inputFS.close()
+            inputDS.close()
+          }
+        } else {
+          None
+        }
+
+      case (false, true) =>
+        logInfo("Initializing options for a SSL connection")
+        for (trustStore <- dsSSLOptions.trustStore) yield {
+          val input = Files.asByteSource(dsSSLOptions.trustStore.get).openStream()
+          try {
+            val ks = KeyStore.getInstance(KeyStore.getDefaultType)
+            ks.load(input, dsSSLOptions.trustStorePassword.get.toCharArray)
+
+            val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm)
+            tmf.init(ks)
+            tmf.getTrustManagers
+          } finally {
+            input.close()
+          }
+        }
+      case (false, false) => None
+    }
   }
 
   def getSSLOptions(module: String): SSLOptions = {
