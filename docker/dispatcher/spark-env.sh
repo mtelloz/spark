@@ -14,7 +14,7 @@ if [ "${SPARK_VIRTUAL_USER_NETWORK}" = "true" ]; then
 fi
 
 if [ "${SPARK_SSL_SECURITY_ENABLED}" == "true" ]; then
-    source /opt/spark/dist/kms_utils-0.2.1.sh
+    source /tmp/kms_utils-0.2.1.sh
 
     VAULT_HOSTS=$VAULT_HOST
     export SPARK_SSL_CERT_PATH="/tmp"
@@ -50,7 +50,6 @@ if [ "${SPARK_SSL_SECURITY_ENABLED}" == "true" ]; then
     mv $SPARK_SSL_CERT_PATH/ca-bundle.pem $SPARK_SSL_CERT_PATH/caroot.crt
 
 fi
-
 # I first set this to MESOS_SANDBOX, as a Workaround for MESOS-5866
 # But this fails now due to MESOS-6391, so I'm setting it to /tmp
 MESOS_DIRECTORY=/tmp
