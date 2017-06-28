@@ -659,6 +659,7 @@ object SparkSubmit {
         args.sparkProperties.get("spark.secret.secretID").isDefined)
         || args.sparkProperties.get("spark.secret.vault.tempToken").isDefined
         || sys.env.get("VAULT_TEMP_TOKEN").isDefined) {
+
       val host = args.sparkProperties("spark.secret.vault.host")
       val vaultToken = if (args.sparkProperties.get("spark.secret.vault.tempToken").isDefined
         || sys.env.get("VAULT_TEMP_TOKEN").isDefined) {
@@ -669,9 +670,11 @@ object SparkSubmit {
         val secretID = args.sparkProperties("spark.secret.secretID")
         VaultHelper.getTokenFromAppRole(host, roleID, secretID)
       }
+
       val environment = ConfigSecurity.prepareEnvironment(Option(vaultToken), Option(host))
       val principal = environment.get("principal").getOrElse(args.principal)
       val keytab = environment.get("keytabPath").getOrElse(args.keytab)
+
       environment.foreach{case (key, value) => sysProps.put(key, value)}
       (principal, keytab)
     } else (args.principal, args.keytab)
