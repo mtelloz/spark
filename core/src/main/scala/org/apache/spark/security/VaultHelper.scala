@@ -30,8 +30,11 @@ object VaultHelper extends Logging {
                           secretId: String): String = {
     val requestUrl = s"$vaultHost/v1/auth/approle/login"
     logDebug(s"Requesting login from app and role: $requestUrl")
-    val jsonAppRole = jsonRoleSecretTemplate.replace("_replace_role_", roleId
+    val replace: String = jsonRoleSecretTemplate.replace("_replace_role_", roleId
       .replace("_replace_secret_", secretId))
+    logInfo(s"getting secret: $secretId and role: $roleId")
+    logInfo(s"generated JSON: $replace")
+    val jsonAppRole = replace
     HTTPHelper.executePost(requestUrl, "auth",
       None, Some(jsonAppRole))("client_token").asInstanceOf[String]
   }
