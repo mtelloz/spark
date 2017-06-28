@@ -21,6 +21,10 @@ if [ "${SPARK_SSL_SECURITY_ENABLED}" == "true" ]; then
     SERVICE_ID=$APP_NAME
     INSTANCE=$APP_NAME
 
+   echo "VAULT_HOSTS: ${VAULT_HOSTS} SPARK_SSL_CERT_PATH: ${SPARK_SSL_CERT_PATH} SERVICE_ID: ${SERVICE_ID} INSTANCE; ${INSTANCE}"
+
+   echo "VAULT_ROLE_ID: $VAULT_ROLE_ID"
+
     #0--- IF VAULT_ROLE_ID IS NOT EMPTY [!-z $YOUR_VAR] IT MEANS THAT WE ARE DEALING WITH SPARK DRIVER
     if [! -z "$VAULT_ROLE_ID"]; then
         login
@@ -29,12 +33,16 @@ if [ "${SPARK_SSL_SECURITY_ENABLED}" == "true" ]; then
         VAULT_TOKEN=$(curl -k -L -XPOST -H "X-Vault-Token:$VAULT_TEMP_TOKEN" "$VAULT_HOSTS/v1/sys/wrapping/unwrap" -s| python -m json.tool | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["data"]["token"]')
     fi
 
+   echo "VAULT_TOKEN: $VAULT_TOKEN"
+
     #2--- GET SECRETS WITH APP TOKEN
     getCert "userland" "$INSTANCE" "$SERVICE_ID" "PEM" $SPARK_SSL_CERT_PATH
     getCAbundle $SPARK_SSL_CERT_PATH "PEM"
 
     #3--- RESTORE TEMP TOKEN
     export VAULT_TEMP_TOKEN=$(curl -k -L -XPOST -H "X-Vault-Wrap-TTL: 6000" -H "X-Vault-Token:$VAULT_TOKEN" -d "{\"token\": \"$VAULT_TOKEN\" }" "$VAULT_HOSTS/v1/sys/wrapping/wrap" -s| python -m json.tool | python -c 'import json,sys;obj=json.load(sys.stdin);print obj["wrap_info"]["token"]')
+
+    echo "VAULT_TEMP_TOKEN: $VAULT_TEMP_TOKEN"
 
     openssl pkcs8 -topk8 -inform pem -in "${SPARK_SSL_CERT_PATH}/${SERVICE_ID}.key" -outform der -nocrypt -out "${SPARK_SSL_CERT_PATH}/pkcs8.key"
 
